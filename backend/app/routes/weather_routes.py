@@ -6,49 +6,17 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Create a Blueprint for UV related routes
-uv_bp = Blueprint("uv_bp", __name__)
+# Create a Blueprint for weather related routes
+weather_bp = Blueprint("weather_bp", __name__)
 
 
-def get_uv_level_and_color(uv_index):
+@weather_bp.route("/api/weather", methods=["GET"])
+def get_weather():
     """
-    Determine the UV risk level and corresponding color based on the UV index.
-    """
-    if uv_index <= 2:
-        return "Low", "green"
-    elif uv_index <= 5:
-        return "Moderate", "yellow"
-    elif uv_index <= 7:
-        return "High", "orange"
-    elif uv_index <= 10:
-        return "Very High", "red"
-    else:
-        return "Extreme", "purple"
-
-
-def get_uv_alert(uv_index):
-    """
-    Generate a human-readable alert message based on the UV index.
-    """
-    if uv_index <= 2:
-        return "Low UV. Minimal protection required for most people."
-    elif uv_index <= 5:
-        return "Moderate UV. Use sunscreen if you are outside for long periods."
-    elif uv_index <= 7:
-        return "High UV. Your skin can be damaged quickly. Wear sunscreen and find shade."
-    elif uv_index <= 10:
-        return "Very High UV. Skin damage can happen very fast. Find shade now."
-    else:
-        return "Extreme UV. Avoid direct sunlight immediately and use full protection."
-
-
-@uv_bp.route("/api/uv", methods=["GET"])
-def get_uv():
-    """
-    Endpoint to retrieve UV data for a given location.
+    Endpoint to retrieve real weather data for a given location.
 
     Example request:
-    /api/uv?lat=-37.81&lon=144.96
+    /api/weather?lat=-37.81&lon=144.96
     """
 
     # Get query parameters from the request
@@ -94,30 +62,32 @@ def get_uv():
         # Handle HTTP errors from the external API
         if response.status_code != 200:
             return jsonify({
-                "error": "Unable to fetch UV data from external API"
+                "error": "Unable to fetch weather data from external API"
             }), 502
 
         data = response.json()
-
-        # OpenWeather returns UV index in current.uvi
         current_data = data.get("current", {})
-        uv_index = current_data.get("uvi")
 
-        if uv_index is None:
+        temperature = current_data.get("temp")
+        wind_speed = current_data.get("wind_speed")
+
+        weather_list = current_data.get("weather", [])
+        condition = "Unknown"
+
+        if weather_list and isinstance(weather_list, list):
+            condition = weather_list[0].get("main", "Unknown")
+
+        if temperature is None or wind_speed is None:
             return jsonify({
-                "error": "No UV data available"
+                "error": "No weather data available"
             }), 404
-
-        level, color = get_uv_level_and_color(uv_index)
-        alert = get_uv_alert(uv_index)
 
         return jsonify({
             "latitude": lat,
             "longitude": lon,
-            "uv_index": uv_index,
-            "level": level,
-            "color": color,
-            "alert": alert
+            "temperature": temperature,
+            "condition": condition,
+            "wind_speed": wind_speed
         }), 200
 
     except requests.exceptions.Timeout:
@@ -127,10 +97,10 @@ def get_uv():
 
     except requests.exceptions.RequestException:
         return jsonify({
-            "error": "Unable to fetch UV data"
+            "error": "Unable to fetch weather data"
         }), 500
 
     except Exception:
         return jsonify({
-            "error": "Unexpected server error while processing UV data"
+            "error": "Unexpected server error while processing weather data"
         }), 500
